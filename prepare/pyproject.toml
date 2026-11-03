@@ -1,0 +1,22 @@
+[project]
+name = "lesson-overlay-prepare"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = ["playwright==1.56.0"]
+
+[project.optional-dependencies]
+speech = ["whisperx==3.8.6", "torch==2.8.0", "torchaudio==2.8.0", "torchvision==0.23.0", "faster-whisper==1.2.1"]
+
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchaudio = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]

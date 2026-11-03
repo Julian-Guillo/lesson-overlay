@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Lesson audio follow",
+  "description": "Follow lesson audio with private local timings, highlighting and scrolling the existing article.",
+  "version": "0.2.0",
+  "permissions": ["storage"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://hq.mega.dev/lessons/*"],
+      "js": ["shared.js", "content.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

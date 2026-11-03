@@ -1,0 +1,9 @@
+.private/
+timings/*
+!timings/README.md
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+node_modules/
+.DS_Store

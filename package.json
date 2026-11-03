@@ -1,0 +1,19 @@
+{
+  "name": "lesson-audio-follow",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Development tests only; the browser extension needs no npm install or build.",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "format": "prettier --write *.js *.css *.json tests/*.cjs prepare/*.cjs",
+    "format:check": "prettier --check *.js *.css *.json tests/*.cjs prepare/*.cjs"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "printWidth": 100
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0",
+    "prettier": "3.6.2"
+  }
+}
