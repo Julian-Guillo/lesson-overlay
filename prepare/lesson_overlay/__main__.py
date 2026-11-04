@@ -20,6 +20,10 @@ PACK = ROOT / "timings"
 ID = re.compile(r"s\d{2}e\d{2}\Z")
 
 
+class LoginRequired(ValueError):
+    pass
+
+
 def file_hash(path):
     h = hashlib.sha256()
     with Path(path).open("rb") as f:
@@ -134,14 +138,14 @@ def capture(lesson, executable=None):
         response = page.goto(
             f"https://hq.mega.dev/lessons/{lesson}/", wait_until="domcontentloaded"
         )
+        if response is not None and response.status == 401:
+            raise LoginRequired("Course sign-in required")
         if response is None or response.status >= 400:
             raise ValueError(
                 "Course access refused. Use the supported sign-in/browser capture route; no automatic access retries."
             )
         if not page.locator(".lesson-article .prose").count():
-            raise ValueError(
-                "Lesson unavailable or login expired. Run the login command in the dedicated profile."
-            )
+            raise LoginRequired("Lesson unavailable or course sign-in required")
         source = (ROOT / "shared.js").read_text()
         blocks = page.evaluate(
             "() => {"
@@ -212,6 +216,23 @@ def login(executable=None):
             raise
 
 
+def capture_with_login(lesson, executable=None):
+    try:
+        return capture(lesson, executable)
+    except LoginRequired:
+        print(
+            "Lesson not accessible. Sign in if needed; the preparation window will open.",
+            flush=True,
+        )
+        login(executable)
+        try:
+            return capture(lesson, executable)
+        except LoginRequired:
+            raise ValueError(
+                "Lesson still unavailable after sign-in; check access and try again."
+            ) from None
+
+
 def speech(audio, cache, model):
     output = cache / f"aligned-{model}.json"
     if output.exists():
@@ -236,7 +257,7 @@ def prepare(args):
     snapshot_path, audio = (
         (args.snapshot.resolve(), args.audio.resolve())
         if args.snapshot
-        else capture(args.lesson, args.browser)
+        else capture_with_login(args.lesson, args.browser)
     )
     snapshot = json.loads(snapshot_path.read_text())
     if (

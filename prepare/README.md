@@ -1,5 +1,7 @@
 # Prepare lesson timings
 
+Start with the [new-lesson checklist](#checklist-for-each-new-lesson). After the automated checks, complete the [manual timing review](#manual-timing-review) using the WhisperX word alignment.
+
 The maintainer CLI runs on Linux and macOS. It requires Node 20+, Python 3.11 through 3.13, `uv`, `ffmpeg` and `ffprobe`. Run the commands below from the repository root. The browser extension has no runtime dependencies.
 
 One-time setup:
@@ -8,10 +10,9 @@ One-time setup:
 npm ci --ignore-scripts
 uv sync --project prepare --extra speech --frozen
 uv run --project prepare --extra speech --frozen playwright install chromium
-uv run --project prepare --extra speech --frozen python -m lesson_overlay login
 ```
 
-Sign in to the course in the preparation window, then close it. The command uses a separate browser profile in `.private/browser-profile/`. To use an installed Chromium-based browser for sign-in and capture, add `--browser /path/to/browser`. It will use the same preparation profile. On a minimal Linux system, follow Playwright's instructions to install any missing system libraries.
+The command uses a separate browser profile in `.private/browser-profile/`. To use an installed Chromium-based browser for sign-in and capture, add `--browser /path/to/browser`. It will use the same preparation profile, not your everyday browser session. On a minimal Linux system, follow Playwright's instructions to install any missing system libraries.
 
 Prepare a lesson:
 
@@ -20,9 +21,9 @@ uv run --project prepare --extra speech --frozen python -m lesson_overlay prepar
 uv run --project prepare --frozen python -m lesson_overlay check-pack
 ```
 
-Replace `<lesson-id>` with the ID from the lesson URL. Preparation does not use completion or story controls. If sign-in expires or the course refuses access, the job stops with an error. Sign in through the course page and rerun the command.
+Replace `<lesson-id>` with the ID from the lesson URL. If sign-in is needed or the lesson is unavailable, a preparation browser window opens. Sign in there if needed, then close the window; the command retries capture once. If the lesson is still unavailable or access is refused, it stops with an error. You can also sign in ahead of time with `uv run --project prepare --extra speech --frozen python -m lesson_overlay login`. Preparation does not use completion or story controls.
 
-The pipeline captures and hashes the live DOM and lesson MP3. It transcribes the audio locally with a pinned small model, then uses forced alignment to refine word times. It matches the transcript to article text in order and checks chapter times and ambiguous matches. Before export, it runs the extension content script against a private DOM fixture rebuilt from the capture. A figure cue needs matching alt-label text and a position between neighboring prose targets that identifies a single figure. Uncertain intervals stay empty.
+The pipeline saves the live article HTML, extracts supported article targets and hashes the snapshot and lesson MP3. The DOM adapter selects headings, paragraphs, list items and figures. It excludes player controls, duplicate images and standalone resource links. The pipeline transcribes the audio locally with a pinned small model, then uses forced alignment to refine word times. It matches the transcript to article text in order and checks chapter times and ambiguous matches. Before export, it runs the extension content script against a private DOM fixture rebuilt from the capture. A figure cue needs matching alt-label text and a position between neighboring prose targets that identifies a single figure. Uncertain intervals stay empty. Not every HTML element becomes a target, and not every target or sentence receives a cue.
 
 If usable prose coverage is below 90% or chapter anchors disagree, the pipeline retries the full audio once with a pinned medium model. It keeps the better valid result. If the retry fails, it can still export the original valid partial result. It exports nothing below 70% coverage. These checks measure coverage and consistency; they do not establish that every cue matches the speech.
 
@@ -30,20 +31,136 @@ The first run downloads models from Hugging Face and PyTorch. The pipeline proce
 
 Before export, the pipeline checks the schema, source, cues, fingerprint and private runtime results. It replaces the lesson file atomically and allows only one preparation job to update the pack at a time. If generation or checks fail, it keeps the previous files. `timings/manifest.json` lists file hashes and revisions. Run `check-pack` to detect corrupt or mismatched copies. Reports are in `.private/reports/`.
 
-Local transcription and alignment passed for S02E02 on 2026-11-03 with an article capture and audio download from a signed-in Brave session. A cached rerun produced identical timing files. Capture through the preparation browser profile still needs a live maintainer test. The S01E05 pilot uses imported alignment. See [Preparation inputs and recovery](#preparation-inputs-and-recovery) for the browser capture steps.
+Local transcription and alignment passed for S02E02 on 2026-11-03 with an article capture and audio download from a signed-in Brave session. A cached rerun produced identical timing files. Capture through the dedicated preparation browser profile passed for S02E03 on 2026-11-04. The S01E05 pilot uses imported alignment. See [Preparation inputs and recovery](#preparation-inputs-and-recovery) for the browser capture steps.
 
 ## Checklist for each new lesson
 
 1. Confirm the requested lesson on the signed-in course page. For "today's" or "latest", check the live lessons listing and its availability date. Record the lesson ID and URL.
-2. Run the preparation command above if the dedicated browser profile is signed in. Otherwise, use the [signed-in browser capture recipe](#signed-in-browser-capture). Download the exact lesson audio, capture the live article and chapter markers, and save them under `.private/captures/<lesson-id>/`. Use the native audio beneath the video.
+2. Run the preparation command above and sign in when prompted. If browser capture fails, use the [signed-in browser capture recipe](#signed-in-browser-capture). Download the exact lesson audio, capture the live article and chapter markers, and save them under `.private/captures/<lesson-id>/`. Use the native audio beneath the video.
 3. Run preparation with the captured inputs. The pipeline runs faster-whisper small on CPU, aligns words with WhisperX, and matches timestamps to paragraphs, list items, headings and diagrams. Let the coverage checks decide whether to retry with the medium model. Leave uncertain intervals empty. Do not invent timestamps or tune thresholds for a lesson.
 4. Read `.private/reports/<lesson-id>.json`. Check text coverage, figure coverage, chapter disagreements, retry results and `runtime_checks`. Confirm that the run exported `timings/lessons/<lesson-id>.json` and that `check-pack` passes. A failed run may leave an older file in place.
-5. Save SHA-256 hashes of the exported lesson file and `timings/manifest.json`, then repeat the same preparation command. Confirm it reuses the alignment cache and produces identical exports. Save a copy of the first report if needed. Reruns replace it.
-6. Run the [development checks](#development-checks) after changes to code or dependencies. Each preparation already runs schema validation and the private DOM/clock checks before export.
-7. Reload the extension and refresh the lesson. Confirm the displayed data revision matches the export. Use the native player to check playback, pause and chapter seeks near the beginning, middle and end. Check a list or diagram when available. Save screenshots and browser observations in `.private/reports/`. Report any browser check you could not run; automated DOM checks do not replace it.
-8. Leave playback paused at the beginning. Record the result and remaining gaps, then tell the recipient to reload the extension, refresh the lesson and test it. No listening approval is required before export. Never mark the lesson done, submit a challenge or use story controls as part of timestamp preparation.
+5. Save the first report and SHA-256 hashes of the lesson file and `timings/manifest.json`. Rerun preparation with the captured snapshot and audio, as shown below. Confirm the output says it reused the alignment cache and both hashes match. Stop and investigate a mismatch. Do this before manual edits because preparation replaces the lesson file and report.
+6. Review all untimed figures and other supported targets, including partly timed text. Follow [manual timing review](#manual-timing-review), validate any changes and record unresolved gaps. Do this after the cached rerun because preparation overwrites manual changes.
+7. Run the [development checks](#development-checks) after changes to code or dependencies. Each preparation already runs schema validation and the private DOM/clock checks before export.
+8. Reload the extension and refresh the lesson. Confirm the displayed data revision matches the export. Use the native player to check playback, pause and chapter seeks near the beginning, middle and end. Check a list or diagram when available. Save screenshots and browser observations in `.private/reports/`. Report any browser check you could not run; automated DOM checks do not replace it.
+9. Leave playback paused at the beginning. Record the result and remaining gaps, then tell the recipient to reload the extension, refresh the lesson and test it. No listening approval is required before export. Never mark the lesson done, submit a challenge or use story controls as part of timestamp preparation.
 
 Keep media, article captures, transcripts, models and reports in `.private/`. Only the generated timing pack belongs in `timings/`. Share or publish files only when requested.
+
+For step 5, replace `s00e00` with the lesson ID. Preserve any options that affected the first run, such as `--no-retry`.
+
+```bash
+lesson=s00e00
+cp ".private/reports/$lesson.json" ".private/reports/$lesson-first.json"
+sha256sum "timings/lessons/$lesson.json" timings/manifest.json > ".private/reports/$lesson-first.sha256"
+uv run --project prepare --extra speech --frozen python -m lesson_overlay prepare "$lesson" \
+  --snapshot ".private/captures/$lesson/snapshot.json" \
+  --audio ".private/captures/$lesson/audio.mp3"
+sha256sum -c ".private/reports/$lesson-first.sha256"
+```
+
+## Manual timing review
+
+Perform this review after preparation, `check-pack` and the cached reproducibility check pass. Compare `.private/captures/<lesson-id>/article.html` and `snapshot.json` with the exported targets and cues. `lesson_overlay.mapping.identify` derives each target key from the snapshot blocks. Check figures without cues, text targets without cues, and text ranges not covered by a cue. A timed target may still have untimed sentences. Inspect other article HTML for meaningful spoken content that the adapter did not select. Some HTML, such as player controls and standalone links, has no target and cannot receive a cue in the current format. Record any unsupported spoken content and consider whether the adapter needs a separate change. Do not invent targets.
+
+To list the gaps, replace `s00e00` below with the lesson ID. The output contains private lesson content. For text, missing indexes refer to `TOKEN` matches in the target text.
+
+```bash
+prepare/.venv/bin/python - s00e00 <<'PY'
+import json
+import sys
+from pathlib import Path
+from lesson_overlay.mapping import TOKEN, identify
+
+lesson = sys.argv[1]
+snapshot = json.loads(Path(f'.private/captures/{lesson}/snapshot.json').read_text())
+data = json.loads(Path(f'timings/lessons/{lesson}.json').read_text())
+for index, block in enumerate(identify(snapshot['blocks'])):
+    cues = [cue for cue in data['cues'] if cue['target'] == block['key']]
+    count = len(list(TOKEN.finditer(block['text']))) if block['kind'] != 'figure' else 0
+    missing = [i for i in range(count) if not any(c['from'] <= i < c['to'] for c in cues)]
+    if (block['kind'] == 'figure' and not cues) or missing:
+        print(index, block['kind'], 'missing:', missing, 'key:', block['key'])
+        print(block.get('alt') if block['kind'] == 'figure' else block['text'])
+PY
+```
+
+Find the cached WhisperX alignment using the audio hash and pipeline version from the report. The command below prints the available alignment files and verifies their source hashes. Replace `s00e00` with the lesson ID.
+
+```bash
+prepare/.venv/bin/python - s00e00 <<'PY'
+import json
+import sys
+from pathlib import Path
+from lesson_overlay.mapping import build, digest
+
+lesson = sys.argv[1]
+report = json.loads(Path(f'.private/reports/{lesson}.json').read_text())
+snapshot = json.loads(Path(f'.private/captures/{lesson}/snapshot.json').read_text())
+data = json.loads(Path(f'timings/lessons/{lesson}.json').read_text())
+cache = Path('.private/cache') / digest(report['audio_sha256'] + report['pipeline'])
+for path in sorted(cache.glob('aligned-*.json')):
+    alignment = json.loads(path.read_text())
+    if alignment.get('source_sha256') != report['audio_sha256']:
+        raise ValueError(f'Audio hash mismatch: {path}')
+    rebuilt, _ = build(snapshot, alignment, report['audio_sha256'], data['media']['duration'])
+    print(path, 'matches automatic revision:', rebuilt['revision'] == data['revision'])
+if not list(cache.glob('aligned-*.json')):
+    raise ValueError('No cached alignment found')
+PY
+```
+
+Each alignment contains segments with text and `words`, where each word may have `start` and `end` in seconds. Inspect those words around each untimed target and compare their text with the article, figure alt text and neighboring cues. If both small and medium alignments exist, the report does not identify which one won. The command rebuilds each candidate and compares its revision with the automatic lesson file. Investigate if neither matches. The aligned transcript and word times are sufficient evidence when they identify the target and support the interval. Listening to the audio is optional, and the report must say whether it occurred.
+
+Add a cue only when the spoken content identifies the target and supports its start and end. A clear paraphrase can support a cue. Use neighboring cues, chapter markers and figure alt text as context, not as proof of a time. If a figure is not described, or the evidence is ambiguous, leave it untimed. Do not fill silence or assign the same interval to multiple targets. Check for overlapping word times, and leave an uncertain boundary untimed. If a correction requires changing an existing cue, preserve non-overlapping, ordered intervals and record the evidence for both changes.
+
+Copy `timings/lessons/<lesson-id>.json` to `.private/reports/<lesson-id>-reviewed.json`. Add reviewed cues with the existing target key. For text, `from` and `to` are the half-open token range in that target, based on `lesson_overlay.mapping.TOKEN`. For a figure, both are zero. Keep times in seconds within the audio duration. Save a private review report with each reviewed target, the source alignment, evidence, decision and remaining gaps. State whether audio was heard. The generated report and its coverage figures describe the automatic run, not the manual review.
+
+The following command sorts the candidate cues, recalculates unknown intervals and the revision, checks the original pack, validates the candidate against the snapshot and runs the private DOM and clock checks. It then replaces the lesson file and updates the manifest under the preparation lock. Replace `s00e00` and put the reviewed copy at the indicated candidate path first.
+
+```bash
+prepare/.venv/bin/python - s00e00 <<'PY'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+from lesson_overlay.__main__ import ID, PACK, PRIVATE, atomic_json, check_pack, inventory, lock, validate_file
+from lesson_overlay.mapping import complement, digest, js_json
+
+lesson = sys.argv[1]
+if not ID.fullmatch(lesson):
+    raise ValueError('Invalid lesson ID')
+candidate = PRIVATE / 'reports' / f'{lesson}-reviewed.json'
+snapshot = PRIVATE / 'captures' / lesson / 'snapshot.json'
+target = PACK / 'lessons' / f'{lesson}.json'
+with lock():
+    check_pack()
+    original = json.loads(target.read_text())
+    original_manifest = json.loads((PACK / 'manifest.json').read_text())
+    data = json.loads(candidate.read_text())
+    for key in ('schema', 'normalization', 'lesson', 'media', 'article', 'targets', 'status', 'checks'):
+        if data[key] != original[key]:
+            raise ValueError(f'Unexpected change to {key}')
+    data['cues'].sort(key=lambda cue: (cue['start'], cue['end']))
+    data['unknown'] = complement(data['cues'], data['media']['duration'])
+    data['revision'] = ''
+    data['revision'] = digest(js_json(data))[:12]
+    atomic_json(candidate, data)
+    validate_file(candidate, snapshot)
+    subprocess.run(['node', 'tests/check-lesson.cjs', str(snapshot), str(candidate)], check=True)
+    try:
+        atomic_json(target, data)
+        atomic_json(PACK / 'manifest.json', inventory())
+        check_pack()
+    except Exception:
+        atomic_json(target, original)
+        atomic_json(PACK / 'manifest.json', original_manifest)
+        raise
+PY
+```
+
+The checks establish schema, target resolution and clock behavior. They do not establish that a cue matches the speech. Do not rerun preparation after publishing the reviewed candidate without repeating this review: it regenerates the automatic timing file and report.
 
 ## Development checks
 

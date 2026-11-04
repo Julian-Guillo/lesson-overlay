@@ -46,4 +46,4 @@ Press **Play** in **Listen to this lesson**, beneath the video. The extension fo
 
 ## Prepare timings or develop
 
-See the maintainer guide for [the new-lesson checklist](prepare/README.md#checklist-for-each-new-lesson), setup, browser capture, timing generation, and development checks.
+To prepare a new lesson, follow the [new-lesson checklist](prepare/README.md#checklist-for-each-new-lesson). After generation and validation, use the [manual timing review](prepare/README.md#manual-timing-review) to compare untimed figures and text with the WhisperX word alignment. The maintainer guide also covers setup, browser capture and development checks. Repository agent instructions are in [AGENTS.md](AGENTS.md).

@@ -12,6 +12,33 @@ from lesson_overlay import __main__ as cli
 from lesson_overlay.mapping import build, identify, tokens
 
 
+class CaptureLoginTests(unittest.TestCase):
+    @patch.object(cli, "login")
+    @patch.object(cli, "capture")
+    def test_sign_in_then_retry_once(self, capture, login):
+        capture.side_effect = [cli.LoginRequired(), ("snapshot", "audio")]
+        self.assertEqual(
+            cli.capture_with_login("s02e03", "/browser"), ("snapshot", "audio")
+        )
+        login.assert_called_once_with("/browser")
+        self.assertEqual(capture.call_count, 2)
+
+    @patch.object(cli, "login")
+    @patch.object(cli, "capture", side_effect=cli.LoginRequired())
+    def test_unavailable_after_sign_in_stops(self, capture, login):
+        with self.assertRaisesRegex(ValueError, "still unavailable"):
+            cli.capture_with_login("s02e03")
+        login.assert_called_once_with(None)
+        self.assertEqual(capture.call_count, 2)
+
+    @patch.object(cli, "login")
+    @patch.object(cli, "capture", side_effect=ValueError("access refused"))
+    def test_other_errors_do_not_trigger_sign_in(self, capture, login):
+        with self.assertRaisesRegex(ValueError, "access refused"):
+            cli.capture_with_login("s02e03")
+        login.assert_not_called()
+
+
 def snapshot(texts):
     return {
         "lesson": "s00e00",
